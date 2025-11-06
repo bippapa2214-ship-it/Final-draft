@@ -3,63 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BledChat - Neon Blue Messaging</title>
+    <title>BledChat - Secure Messaging</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <!-- Header with Logo -->
-        <header class="header">
+        <!-- Login/Signup Screen -->
+        <div id="authScreen" class="auth-screen">
             <div class="logo">
                 <div class="water-balloon"></div>
-                <h1 class="title">BledChat</h1>
+                <h1>BledChat</h1>
             </div>
-            <p class="subtitle">Neon Blue Messaging</p>
-        </header>
-
-        <!-- Auth Section -->
-        <div class="auth-section">
-            <div class="auth-buttons">
-                <button class="auth-btn signin-btn">Sign in</button>
-                <button class="auth-btn signup-btn">Sign Up</button>
-            </div>
-        </div>
-
-        <hr class="divider">
-
-        <!-- Chat Area -->
-        <div class="chat-area">
-            <div class="chat-header">
-                <h3 class="chat-title">Redactor</h3>
-            </div>
+            <p class="subtitle">Secure Encrypted Messaging</p>
             
-            <div class="messages-container">
-                <div class="message error-message">
-                    <strong>ERROR</strong>
+            <div class="auth-form">
+                <input type="text" id="username" placeholder="Username" class="auth-input">
+                <input type="password" id="password" placeholder="Password" class="auth-input">
+                <div class="auth-buttons">
+                    <button onclick="login()" class="auth-btn signin-btn">Sign In</button>
+                    <button onclick="signup()" class="auth-btn signup-btn">Sign Up</button>
                 </div>
-                <div class="message normal-message">
-                    Somewhere
-                </div>
-                <div class="message signin-message">
-                    <strong>3 Sign In</strong>
-                </div>
-            </div>
-
-            <!-- Message Input -->
-            <div class="input-container">
-                <input type="text" class="message-input" placeholder="Type your message...">
-                <button class="send-btn">Send</button>
+                <div id="authMessage" class="auth-message"></div>
             </div>
         </div>
 
-        <!-- File List -->
-        <div class="file-list">
-            <div class="file-item">auth.js</div>
-            <div class="file-item">messaging.js</div>
-            <div class="file-item">subscribers.js</div>
-            <div class="file-item">index.html</div>
-            <div class="file-item">package.json</div>
-            <div class="file-item">vencal.json</div>
+        <!-- Main Chat Screen (Hidden Initially) -->
+        <div id="chatScreen" class="chat-screen" style="display: none;">
+            <header class="chat-header">
+                <div class="header-left">
+                    <div class="water-balloon small"></div>
+                    <h2>BledChat</h2>
+                </div>
+                <div class="header-right">
+                    <span id="currentUser"></span>
+                    <button onclick="logout()" class="logout-btn">Logout</button>
+                </div>
+            </header>
+
+            <div class="chat-layout">
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <div class="sidebar-section">
+                        <h3>Chat Rooms</h3>
+                        <button onclick="createRoom()" class="room-btn">+ New Room</button>
+                        <div id="roomList" class="room-list">
+                            <div class="room-item active" onclick="switchRoom('general')"># General</div>
+                            <div class="room-item" onclick="switchRoom('random')"># Random</div>
+                        </div>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <h3>Online Users</h3>
+                        <div id="userList" class="user-list"></div>
+                    </div>
+                </div>
+
+                <!-- Main Chat Area -->
+                <div class="main-chat">
+                    <div class="chat-header-bar">
+                        <h3 id="currentRoom"># General</h3>
+                        <div class="room-actions">
+                            <input type="file" id="fileInput" style="display: none;" onchange="uploadFile()">
+                            <button onclick="document.getElementById('fileInput').click()" class="action-btn">📎 File</button>
+                        </div>
+                    </div>
+
+                    <div id="messagesContainer" class="messages-container">
+                        <!-- Messages will appear here -->
+                    </div>
+
+                    <div class="input-area">
+                        <input type="text" id="messageInput" placeholder="Type your message..." class="message-input">
+                        <button onclick="sendMessage()" class="send-btn">Send</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
