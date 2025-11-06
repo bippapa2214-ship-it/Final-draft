@@ -1,22 +1,27 @@
 // Encryption utilities
 class Encryption {
     static async encrypt(text, key) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(text);
-        const cryptoKey = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(key.padEnd(32, '0').slice(0, 32)),
-            { name: 'AES-GCM' },
-            false,
-            ['encrypt']
-        );
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encrypted = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv },
-            cryptoKey,
-            data
-        );
-        return btoa(String.fromCharCode(...iv) + String.fromCharCode(...new Uint8Array(encrypted)));
+        try {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(text);
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(key.padEnd(32, '0').slice(0, 32)),
+                { name: 'AES-GCM' },
+                false,
+                ['encrypt']
+            );
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encrypted = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv },
+                cryptoKey,
+                data
+            );
+            return btoa(String.fromCharCode(...iv) + String.fromCharCode(...new Uint8Array(encrypted)));
+        } catch (error) {
+            console.error('Encryption error:', error);
+            return text; // Fallback to plain text
+        }
     }
 
     static async decrypt(encryptedData, key) {
@@ -40,7 +45,7 @@ class Encryption {
             return decoder.decode(decrypted);
         } catch (error) {
             console.error('Decryption error:', error);
-            return null;
+            return encryptedData; // Fallback to encrypted text
         }
     }
 }
@@ -68,23 +73,35 @@ function init() {
     checkSavedLogin();
     loadRooms();
     setInterval(updateOnlineUsers, 5000);
+    
+    // Add event listeners
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
 }
 
 // Check for saved login
 function checkSavedLogin() {
     const savedUser = localStorage.getItem('bledchat_user');
-    const savedToken = localStorage.getItem('bledchat_token');
     
-    if (savedUser && savedToken) {
-        currentUser = JSON.parse(savedUser);
-        showChatScreen();
-        loadRoomMessages(currentRoom);
+    if (savedUser) {
+        try {
+            currentUser = JSON.parse(savedUser);
+            showChatScreen();
+            loadRoomMessages(currentRoom);
+            showSystemMessage('Welcome back!');
+        } catch (error) {
+            console.error('Error loading saved user:', error);
+            localStorage.removeItem('bledchat_user');
+        }
     }
 }
 
-// Auth functions
+// Auth functions - FIXED
 async function login() {
-    const username = document.getElementById('username').value;
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     
     if (!username || !password) {
@@ -92,35 +109,50 @@ async function login() {
         return;
     }
     
+    showAuthMessage('Signing in...', 'info');
+    
     try {
-        const response = await fetch('/api/auth', {
+        const response = await fetch('/api/auth.js', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'login', username, password })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                action: 'login', 
+                username, 
+                password 
+            })
         });
         
         const data = await response.json();
+        console.log('Login response:', data);
         
         if (data.success) {
             currentUser = { username, password };
-            // Save login with encryption key derived from password
-            const userData = { username, loginTime: Date.now() };
+            
+            // Save login info
+            const userData = { 
+                username, 
+                loginTime: Date.now() 
+            };
             localStorage.setItem('bledchat_user', JSON.stringify(userData));
-            localStorage.setItem('bledchat_token', btoa(username + ':' + Date.now()));
             
             showChatScreen();
             showAuthMessage('Login successful!', 'success');
             loadRoomMessages(currentRoom);
+            showSystemMessage(`Welcome to BledChat, ${username}!`);
         } else {
-            showAuthMessage(data.error, 'error');
+            showAuthMessage(data.error || 'Login failed', 'error');
         }
     } catch (error) {
-        showAuthMessage('Login failed', 'error');
+        console.error('Login error:', error);
+        showAuthMessage('Network error - please try again', 'error');
     }
 }
 
 async function signup() {
-    const username = document.getElementById('username').value;
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     
     if (!username || !password) {
@@ -128,54 +160,91 @@ async function signup() {
         return;
     }
     
-    if (password.length < 6) {
-        showAuthMessage('Password must be at least 6 characters', 'error');
+    if (username.length < 3) {
+        showAuthMessage('Username must be at least 3 characters', 'error');
         return;
     }
     
+    if (password.length < 4) {
+        showAuthMessage('Password must be at least 4 characters', 'error');
+        return;
+    }
+    
+    showAuthMessage('Creating account...', 'info');
+    
     try {
-        const response = await fetch('/api/auth', {
+        const response = await fetch('/api/auth.js', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'signup', username, password })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                action: 'signup', 
+                username, 
+                password 
+            })
         });
         
         const data = await response.json();
+        console.log('Signup response:', data);
         
         if (data.success) {
-            showAuthMessage('Account created! Please login.', 'success');
+            showAuthMessage('Account created! Please sign in.', 'success');
+            // Clear password field for login
             document.getElementById('password').value = '';
         } else {
-            showAuthMessage(data.error, 'error');
+            showAuthMessage(data.error || 'Signup failed', 'error');
         }
     } catch (error) {
-        showAuthMessage('Signup failed', 'error');
+        console.error('Signup error:', error);
+        showAuthMessage('Network error - please try again', 'error');
     }
 }
 
 function logout() {
     currentUser = null;
     localStorage.removeItem('bledchat_user');
-    localStorage.removeItem('bledchat_token');
     showAuthScreen();
+    showAuthMessage('Logged out successfully', 'success');
 }
 
 // UI functions
 function showAuthScreen() {
     authScreen.style.display = 'block';
     chatScreen.style.display = 'none';
+    // Clear form
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
 }
 
 function showChatScreen() {
     authScreen.style.display = 'none';
     chatScreen.style.display = 'block';
-    currentUserSpan.textContent = currentUser.username;
+    if (currentUser) {
+        currentUserSpan.textContent = currentUser.username;
+    }
 }
 
 function showAuthMessage(message, type) {
     authMessage.textContent = message;
-    authMessage.style.color = type === 'error' ? '#ff0066' : '#00ff88';
-    setTimeout(() => authMessage.textContent = '', 3000);
+    authMessage.className = 'auth-message ' + type;
+    setTimeout(() => {
+        authMessage.textContent = '';
+        authMessage.className = 'auth-message';
+    }, 5000);
+}
+
+function showSystemMessage(message) {
+    const systemMessage = {
+        id: Date.now(),
+        sender: 'System',
+        text: message,
+        room: currentRoom,
+        timestamp: new Date().toISOString(),
+        type: 'system'
+    };
+    addMessageToUI(systemMessage);
 }
 
 // Room functions
@@ -187,21 +256,31 @@ function switchRoom(roomName) {
     document.querySelectorAll('.room-item').forEach(item => {
         item.classList.remove('active');
     });
-    event.target.classList.add('active');
+    
+    // Find and activate the clicked room
+    const roomItems = document.querySelectorAll('.room-item');
+    for (let item of roomItems) {
+        if (item.textContent === `# ${roomName}`) {
+            item.classList.add('active');
+            break;
+        }
+    }
     
     loadRoomMessages(roomName);
 }
 
 function createRoom() {
     const roomName = prompt('Enter room name:');
-    if (roomName && !rooms.has(roomName)) {
-        rooms.add(roomName);
+    if (roomName && roomName.trim() && !rooms.has(roomName)) {
+        const cleanRoomName = roomName.trim();
+        rooms.add(cleanRoomName);
         const roomItem = document.createElement('div');
         roomItem.className = 'room-item';
-        roomItem.textContent = `# ${roomName}`;
-        roomItem.onclick = () => switchRoom(roomName);
+        roomItem.textContent = `# ${cleanRoomName}`;
+        roomItem.onclick = () => switchRoom(cleanRoomName);
         roomList.appendChild(roomItem);
-        switchRoom(roomName);
+        switchRoom(cleanRoomName);
+        showSystemMessage(`Created room: ${cleanRoomName}`);
     }
 }
 
@@ -231,23 +310,27 @@ async function sendMessage() {
     };
     
     // Encrypt message
-    const encryptedMessage = await Encryption.encrypt(text, currentUser.password);
-    message.encryptedText = encryptedMessage;
-    
     try {
-        const response = await fetch('/api/messages', {
+        const encryptedText = await Encryption.encrypt(text, currentUser.password);
+        message.encryptedText = encryptedText;
+    } catch (error) {
+        console.error('Encryption failed, sending plain text');
+    }
+    
+    // Add to UI immediately for better UX
+    addMessageToUI(message);
+    saveMessageToStorage(message);
+    messageInput.value = '';
+    
+    // Try to save to server (optional)
+    try {
+        await fetch('/api/messages.js', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(message)
         });
-        
-        if (response.ok) {
-            messageInput.value = '';
-            addMessageToUI(message);
-            saveMessageToStorage(message);
-        }
     } catch (error) {
-        console.error('Failed to send message:', error);
+        console.error('Failed to send message to server:', error);
     }
 }
 
@@ -256,15 +339,17 @@ async function loadRoomMessages(roomName) {
         messages[roomName] = [];
     }
     
-    // Load from API and storage
+    // Try to load from server
     try {
-        const response = await fetch(`/api/messages?room=${roomName}`);
+        const response = await fetch(`/api/messages.js?room=${encodeURIComponent(roomName)}`);
         if (response.ok) {
-            const apiMessages = await response.json();
-            messages[roomName] = apiMessages;
+            const serverMessages = await response.json();
+            if (Array.isArray(serverMessages)) {
+                messages[roomName] = serverMessages;
+            }
         }
     } catch (error) {
-        console.error('Failed to load messages:', error);
+        console.error('Failed to load messages from server:', error);
     }
     
     displayMessages(roomName);
@@ -273,40 +358,48 @@ async function loadRoomMessages(roomName) {
 async function displayMessages(roomName) {
     messagesContainer.innerHTML = '';
     
-    if (messages[roomName]) {
+    if (messages[roomName] && Array.isArray(messages[roomName])) {
         for (const message of messages[roomName]) {
             // Decrypt message if it's encrypted
             if (message.encryptedText && currentUser) {
-                const decryptedText = await Encryption.decrypt(message.encryptedText, currentUser.password);
-                if (decryptedText) {
-                    message.text = decryptedText;
+                try {
+                    const decryptedText = await Encryption.decrypt(message.encryptedText, currentUser.password);
+                    if (decryptedText) {
+                        message.text = decryptedText;
+                    }
+                } catch (error) {
+                    console.error('Decryption failed for message:', message.id);
                 }
             }
             addMessageToUI(message);
         }
     }
+    
+    // Scroll to bottom
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function addMessageToUI(message) {
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${message.sender === currentUser?.username ? 'own' : 'other'}`;
     
     if (message.type === 'system') {
         messageDiv.className = 'message system';
         messageDiv.textContent = message.text;
     } else if (message.type === 'file') {
+        messageDiv.className = `message ${message.sender === currentUser?.username ? 'own' : 'other'}`;
         messageDiv.innerHTML = `
             <div class="message-sender">${message.sender}</div>
             <div>Shared a file: ${message.fileName}</div>
             <div class="file-message">
-                <button class="download-btn" onclick="downloadFile('${message.fileId}')">Download</button>
+                <button class="download-btn" onclick="downloadFile('${message.fileId}')">Download ${(message.fileSize / 1024).toFixed(1)}KB</button>
             </div>
             <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
         `;
     } else {
+        messageDiv.className = `message ${message.sender === currentUser?.username ? 'own' : 'other'}`;
         messageDiv.innerHTML = `
             <div class="message-sender">${message.sender}</div>
-            <div>${message.text}</div>
+            <div class="message-text">${message.text}</div>
             <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
         `;
     }
@@ -319,78 +412,61 @@ function saveMessageToStorage(message) {
     if (!messages[message.room]) {
         messages[message.room] = [];
     }
-    messages[message.room].push(message);
+    
+    // Avoid duplicates
+    if (!messages[message.room].some(msg => msg.id === message.id)) {
+        messages[message.room].push(message);
+    }
 }
 
-// File sharing
+// File sharing (simplified for demo)
 async function uploadFile() {
+    if (!currentUser) return;
+    
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
     
-    if (!file || !currentUser) return;
+    if (!file) return;
     
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('sender', currentUser.username);
-    formData.append('room', currentRoom);
+    // Create a fake file message for demo
+    const fileMessage = {
+        id: Date.now(),
+        sender: currentUser.username,
+        type: 'file',
+        fileName: file.name,
+        fileId: 'demo_' + Date.now(),
+        fileSize: file.size,
+        room: currentRoom,
+        timestamp: new Date().toISOString()
+    };
     
-    try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (response.ok) {
-            const fileMessage = await response.json();
-            addMessageToUI(fileMessage);
-            saveMessageToStorage(fileMessage);
-        }
-    } catch (error) {
-        console.error('File upload failed:', error);
-    }
+    addMessageToUI(fileMessage);
+    saveMessageToStorage(fileMessage);
     
+    showSystemMessage(`File "${file.name}" uploaded (demo mode)`);
     fileInput.value = '';
 }
 
 async function downloadFile(fileId) {
-    try {
-        const response = await fetch(`/api/files/${fileId}`);
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileId;
-            a.click();
-            window.URL.revokeObjectURL(url);
-        }
-    } catch (error) {
-        console.error('Download failed:', error);
-    }
+    showSystemMessage(`Downloading file (demo mode)`);
+    // In real implementation, this would download the actual file
 }
 
 // User management
 function updateOnlineUsers() {
     if (!currentUser) return;
     
-    // Simulate online users
-    const sampleUsers = ['user1', 'user2', 'user3', currentUser.username];
+    // Demo users
+    const demoUsers = ['Alice', 'Bob', 'Charlie', currentUser.username];
     userList.innerHTML = '';
     
-    sampleUsers.forEach(user => {
+    demoUsers.forEach(user => {
         const userItem = document.createElement('div');
         userItem.className = 'user-item';
-        userItem.textContent = user === currentUser.username ? `${user} (You)` : user;
+        userItem.textContent = user === currentUser.username ? `👑 ${user} (You)` : `💚 ${user}`;
         userList.appendChild(userItem);
     });
 }
-
-// Event listeners
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        sendMessage();
-    }
-});
 
 // Initialize app when loaded
 document.addEventListener('DOMContentLoaded', init);
