@@ -1,5 +1,4 @@
 const users = new Map();
-const sessions = new Map();
 
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,19 +17,29 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'Username already exists' });
       }
       
-      users.set(username, { password, createdAt: new Date() });
-      return res.json({ success: true, message: 'Signed up successfully' });
+      users.set(username, { 
+        password: password, // In production, hash this
+        createdAt: new Date(),
+        lastLogin: new Date()
+      });
+      
+      return res.json({ success: true, message: 'Account created successfully' });
     }
     
-    if (action === 'signin') {
+    if (action === 'login') {
       const user = users.get(username);
       if (!user || user.password !== password) {
         return res.status(400).json({ error: 'Invalid credentials' });
       }
       
-      const sessionId = Math.random().toString(36).substring(2);
-      sessions.set(sessionId, { username });
-      return res.json({ success: true, sessionId, message: 'Signed in successfully' });
+      user.lastLogin = new Date();
+      users.set(username, user);
+      
+      return res.json({ 
+        success: true, 
+        message: 'Login successful',
+        user: { username }
+      });
     }
   }
 
