@@ -1,39 +1,37 @@
-const messages = [];
+let messages = [];
+let files = new Map();
 
-export function messageHandler(ctx, res) {
-  if (ctx.method === 'GET') {
-    return res.json({
-      success: true,
-      messages: messages.slice(-50) // Last 50 messages
-    });
+export default function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
-  
-  if (ctx.method === 'POST') {
-    const { sessionId, message, username } = ctx.body;
+
+  if (req.method === 'GET') {
+    const { room } = req.query;
+    const roomMessages = messages.filter(msg => msg.room === room);
+    return res.json(roomMessages);
+  }
+
+  if (req.method === 'POST') {
+    const message = req.body;
+    message.id = Date.now();
+    message.timestamp = new Date().toISOString();
     
-    if (!message || !username) {
-      return res.status(400).json({ error: 'Missing message or username' });
+    messages.push(message);
+    
+    // Keep only last 1000 messages per room
+    const roomMessages = messages.filter(msg => msg.room === message.room);
+    if (roomMessages.length > 1000) {
+      messages = messages.filter(msg => msg.room !== message.room)
+        .concat(roomMessages.slice(-1000));
     }
     
-    const newMessage = {
-      id: messages.length + 1,
-      username,
-      message,
-      timestamp: new Date().toISOString()
-    };
-    
-    messages.push(newMessage);
-    
-    // Keep only last 100 messages
-    if (messages.length > 100) {
-      messages.shift();
-    }
-    
-    return res.json({
-      success: true,
-      message: newMessage
-    });
+    return res.json({ success: true, message });
   }
-  
-  return res.status(405).json({ error: 'Method not allowed' });
+
+  res.status(404).json({ error: 'Not found' });
 }
